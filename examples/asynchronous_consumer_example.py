@@ -347,10 +347,10 @@ class ExampleConsumer(object):
             self._closing = True
             LOGGER.info('Stopping')
             if self._consuming:
-                self.stop_consuming()
-                self._connection.ioloop.start()
+                self.stop_consuming()   # 停止消费者,内部会先关闭channel,在关闭connection
+                self._connection.ioloop.start()     # 连接关闭的时候，ioloop会自动停止.
             else:
-                self._connection.ioloop.stop()
+                self._connection.ioloop.stop()  # 消费者已经停止了.直接终止ioloop
             LOGGER.info('Stopped')
 
 

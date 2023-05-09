@@ -13,17 +13,11 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ExamplePublisher(object):
-    """This is an example publisher that will handle unexpected interactions
-    with RabbitMQ such as channel and connection closures.
+    """
+    可以处理  RabbitMQ 的 channel和connection 异常情况的生产者实例。
 
-    If RabbitMQ closes the connection, it will reopen it. You should
-    look at the output, as there are limited reasons why the connection may
-    be closed, which usually are tied to permission related issues or
-    socket timeouts.
-
-    It uses delivery confirmations and illustrates one way to keep track of
-    messages that have been sent and if they've been confirmed by RabbitMQ.
-
+    如果RabbitMQ关闭连接，会进行重新开启。在输出中会显示问题，一般来说这些问题是有限的，比如权限问题或者socket连接超时。
+    生产者中使用了 delivery confirm, 并且实现了如何跟踪发送的消息是否已经被RabbitMQ确认了。
     """
     EXCHANGE = 'message'
     EXCHANGE_TYPE = ExchangeType.topic
@@ -32,11 +26,10 @@ class ExamplePublisher(object):
     ROUTING_KEY = 'example.text'
 
     def __init__(self, amqp_url):
-        """Setup the example publisher object, passing in the URL we will use
-        to connect to RabbitMQ.
+        """
+        初始化 发布者对象，传入的URL会用来连接RabbitMQ。
 
         :param str amqp_url: The URL for connecting to RabbitMQ
-
         """
         self._connection = None
         self._channel = None
@@ -50,9 +43,8 @@ class ExamplePublisher(object):
         self._url = amqp_url
 
     def connect(self):
-        """This method connects to RabbitMQ, returning the connection handle.
-        When the connection is established, the on_connection_open method
-        will be invoked by pika.
+        """
+        这个方法连接到RabbitQM，返回的是连接句柄。连接建立后，pika 会回调 on_connection_open 。
 
         :rtype: pika.SelectConnection
 
@@ -65,10 +57,9 @@ class ExamplePublisher(object):
             on_close_callback=self.on_connection_closed)
 
     def on_connection_open(self, _unused_connection):
-        """This method is called by pika once the connection to RabbitMQ has
-        been established. It passes the handle to the connection object in
-        case we need it, but in this case, we'll just mark it unused.
-
+        """
+        这个方法在与RabbitMQ建立连接后被pika回调一次。传入的是连接句柄对象，当然，在这里其实并没有使用。
+        这个的作用是建立channel。
         :param pika.SelectConnection _unused_connection: The connection
 
         """
@@ -76,8 +67,8 @@ class ExamplePublisher(object):
         self.open_channel()
 
     def on_connection_open_error(self, _unused_connection, err):
-        """This method is called by pika if the connection to RabbitMQ
-        can't be established.
+        """
+        无法与RabbitMQ建立连接的时候pika回调当前方法。
 
         :param pika.SelectConnection _unused_connection: The connection
         :param Exception err: The error
@@ -87,11 +78,11 @@ class ExamplePublisher(object):
         self._connection.ioloop.call_later(5, self._connection.ioloop.stop)
 
     def on_connection_closed(self, _unused_connection, reason):
-        """This method is invoked by pika when the connection to RabbitMQ is
-        closed unexpectedly. Since it is unexpected, we will reconnect to
-        RabbitMQ if it disconnects.
+        """
+        当 RabbitMQ 的连接意外关闭时 pika 回调当前方法。
+        如果生产者停止就停止ioloop，否则就重新开启?
 
-        :param pika.connection.Connection connection: The closed connection obj
+        :param pika.connection.Connection connection: 关闭的connection对象
         :param Exception reason: exception representing reason for loss of
             connection.
 
@@ -105,20 +96,18 @@ class ExamplePublisher(object):
             self._connection.ioloop.call_later(5, self._connection.ioloop.stop)
 
     def open_channel(self):
-        """This method will open a new channel with RabbitMQ by issuing the
-        Channel.Open RPC command. When RabbitMQ confirms the channel is open
-        by sending the Channel.OpenOK RPC reply, the on_channel_open method
-        will be invoked.
+        """
+        这个方法发送 Channel.Open RPC 命令给RabbitMQ开启一个新的channel。
+        RabbitMQ发送 Channel.OpenOK RPC 回复确定channel开启后，回调 on_channel_open 方法。
 
         """
         LOGGER.info('Creating a new channel')
         self._connection.channel(on_open_callback=self.on_channel_open)
 
     def on_channel_open(self, channel):
-        """This method is invoked by pika when the channel has been opened.
-        The channel object is passed in so we can make use of it.
-
-        Since the channel is now open, we'll declare the exchange to use.
+        """
+        这个方法在channel开启后被pika回调。传入的是channel对象。
+        一旦channel开启，我们将声明要使用的exchange。
 
         :param pika.channel.Channel channel: The channel object
 
@@ -129,19 +118,17 @@ class ExamplePublisher(object):
         self.setup_exchange(self.EXCHANGE)
 
     def add_on_channel_close_callback(self):
-        """This method tells pika to call the on_channel_closed method if
-        RabbitMQ unexpectedly closes the channel.
-
+        """
+        告诉pika在RabbitMQ意外关闭channel后调用 on_channel_closed 方法.
         """
         LOGGER.info('Adding channel close callback')
         self._channel.add_on_close_callback(self.on_channel_closed)
 
     def on_channel_closed(self, channel, reason):
-        """Invoked by pika when RabbitMQ unexpectedly closes the channel.
-        Channels are usually closed if you attempt to do something that
-        violates the protocol, such as re-declare an exchange or queue with
-        different parameters. In this case, we'll close the connection
-        to shutdown the object.
+        """
+        RabbitMQ 意外关闭channel的时候 pika 回调当前函数.
+        一般来说，channel的一般关闭是由于协议错误，比如使用不同的参数二次定义exchange或者queue。
+        这种情况下，会关闭连接。
 
         :param pika.channel.Channel channel: The closed channel
         :param Exception reason: why the channel was closed
@@ -153,9 +140,8 @@ class ExamplePublisher(object):
             self._connection.close()
 
     def setup_exchange(self, exchange_name):
-        """Setup the exchange on RabbitMQ by invoking the Exchange.Declare RPC
-        command. When it is complete, the on_exchange_declareok method will
-        be invoked by pika.
+        """
+        调用 Exchange.Declare RPC 命令建立exchange。完成后，pika回调self.on_exchange_declareok。
 
         :param str|unicode exchange_name: The name of the exchange to declare
 
@@ -170,8 +156,8 @@ class ExamplePublisher(object):
                                        callback=cb)
 
     def on_exchange_declareok(self, _unused_frame, userdata):
-        """Invoked by pika when RabbitMQ has finished the Exchange.Declare RPC
-        command.
+        """
+        RabbitMQ 完成 Exchange.Declare RPC 命令后被pika调用。
 
         :param pika.Frame.Method unused_frame: Exchange.DeclareOk response frame
         :param str|unicode userdata: Extra user data (exchange name)
@@ -181,9 +167,8 @@ class ExamplePublisher(object):
         self.setup_queue(self.QUEUE)
 
     def setup_queue(self, queue_name):
-        """Setup the queue on RabbitMQ by invoking the Queue.Declare RPC
-        command. When it is complete, the on_queue_declareok method will
-        be invoked by pika.
+        """
+        调用 Queue.Declare RPC 命令建立queue。完成后，pika回调 self.on_queue_declareok。
 
         :param str|unicode queue_name: The name of the queue to declare.
 
@@ -193,11 +178,10 @@ class ExamplePublisher(object):
                                     callback=self.on_queue_declareok)
 
     def on_queue_declareok(self, _unused_frame):
-        """Method invoked by pika when the Queue.Declare RPC call made in
-        setup_queue has completed. In this method we will bind the queue
-        and exchange together with the routing key by issuing the Queue.Bind
-        RPC command. When this command is complete, the on_bindok method will
-        be invoked by pika.
+        """
+        Queue.Declare RPC 调用完成后pika回调当前函数.
+        这个函数里面通过调用Queue.Bind RPC命令，我们使用routing绑定queue和exchange。
+        命令完成后，pika会回调这里设置的 self.on_bindok 方法。
 
         :param pika.frame.Method method_frame: The Queue.DeclareOk frame
 
@@ -210,44 +194,37 @@ class ExamplePublisher(object):
                                  callback=self.on_bindok)
 
     def on_bindok(self, _unused_frame):
-        """This method is invoked by pika when it receives the Queue.BindOk
-        response from RabbitMQ. Since we know we're now setup and bound, it's
-        time to start publishing."""
+        """
+        收到Queue.BindOk响应后pika回调当前函数。一旦我们确定我们初始化并绑定了，就可以开始publish了。
+        """
         LOGGER.info('Queue bound')
         self.start_publishing()
 
     def start_publishing(self):
-        """This method will enable delivery confirmations and schedule the
-        first message to be sent to RabbitMQ
-
+        """
+        当前方法开启 delivery confirm 并将第一个消息发送到RabbitMQ。
         """
         LOGGER.info('Issuing consumer related RPC commands')
         self.enable_delivery_confirmations()
         self.schedule_next_message()
 
     def enable_delivery_confirmations(self):
-        """Send the Confirm.Select RPC method to RabbitMQ to enable delivery
-        confirmations on the channel. The only way to turn this off is to close
-        the channel and create a new one.
+        """
+        发送 Confirm.Select RPC 命令给RabbitMQ在当前channel上开启delivery confirm.
+        关闭的方法只能是关闭channel，创建一个新的.
 
-        When the message is confirmed from RabbitMQ, the
-        on_delivery_confirmation method will be invoked passing in a Basic.Ack
-        or Basic.Nack method from RabbitMQ that will indicate which messages it
-        is confirming or rejecting.
+        当message被RabbitMQ确认之后，无论消息是被确认还是被拒绝都会调用 self.on_delivery_confirmation
 
         """
         LOGGER.info('Issuing Confirm.Select RPC command')
         self._channel.confirm_delivery(self.on_delivery_confirmation)
 
     def on_delivery_confirmation(self, method_frame):
-        """Invoked by pika when RabbitMQ responds to a Basic.Publish RPC
-        command, passing in either a Basic.Ack or Basic.Nack frame with
-        the delivery tag of the message that was published. The delivery tag
-        is an integer counter indicating the message number that was sent
-        on the channel via Basic.Publish. Here we're just doing house keeping
-        to keep track of stats and remove message numbers that we expect
-        a delivery confirmation of from the list used to keep track of messages
-        that are pending confirmation.
+        """
+        当RabbitMQ对Basic.Publish RPC命令响应时回调。
+        传入的参数包含推送的消息的delivery tag、消息是否被ack等信息。
+        目前这个函数中的功能仅仅是对消息的状态信息进行保留，记录消息的数量信息。
+
 
         :param pika.frame.Method method_frame: Basic.Ack or Basic.Nack frame
 
@@ -272,8 +249,8 @@ class ExamplePublisher(object):
                     self._acked += 1
                     del self._deliveries[tmp_tag]
         """
-        NOTE: at some point you would check self._deliveries for stale
-        entries and decide to attempt re-delivery
+        NOTE: 
+        有些时候，可能会需要检查self._deliveries中移除的条目并尝试进行再次投递。
         """
 
         LOGGER.info(
@@ -282,9 +259,8 @@ class ExamplePublisher(object):
             len(self._deliveries), self._acked, self._nacked)
 
     def schedule_next_message(self):
-        """If we are not closing our connection to RabbitMQ, schedule another
-        message to be delivered in PUBLISH_INTERVAL seconds.
-
+        """
+        如果当前的连接没有关闭的话，调度下一个消息进行发送。
         """
         LOGGER.info('Scheduling next message for %0.1f seconds',
                     self.PUBLISH_INTERVAL)
@@ -292,17 +268,9 @@ class ExamplePublisher(object):
                                            self.publish_message)
 
     def publish_message(self):
-        """If the class is not stopping, publish a message to RabbitMQ,
-        appending a list of deliveries with the message number that was sent.
-        This list will be used to check for delivery confirmations in the
-        on_delivery_confirmations method.
-
-        Once the message has been sent, schedule another message to be sent.
-        The main reason I put scheduling in was just so you can get a good idea
-        of how the process is flowing by slowing down and speeding up the
-        delivery intervals by changing the PUBLISH_INTERVAL constant in the
-        class.
-
+        """
+        如果当前并没有停止，publish一个message到RabbitMQ。设置的列表将会用来在方法中检查发送的信息。
+        一旦消息被发送，调度发送下一个消息。这里进行调度的原因在于，这样可以通过修改PUBLISH_INTERVAL常量提高发送速度。
         """
         if self._channel is None or not self._channel.is_open:
             return
@@ -322,8 +290,8 @@ class ExamplePublisher(object):
         self.schedule_next_message()
 
     def run(self):
-        """Run the example code by connecting and then starting the IOLoop.
-
+        """
+        运行实例代码，开始IOLoop
         """
         while not self._stopping:
             self._connection = None
@@ -333,24 +301,20 @@ class ExamplePublisher(object):
             self._message_number = 0
 
             try:
-                self._connection = self.connect()
-                self._connection.ioloop.start()
+                self._connection = self.connect()   # 开启连接，各种处理与配置方法都配置好
+                self._connection.ioloop.start()     # 启动IO监听
             except KeyboardInterrupt:
-                self.stop()
+                self.stop()     # 关闭connection和channel
                 if (self._connection is not None and
                         not self._connection.is_closed):
+                    # 连接没有关闭的时候，继续ioloop. 不太理解为什么这里连接是没有关闭的.
                     self._connection.ioloop.start()
 
         LOGGER.info('Stopped')
 
     def stop(self):
-        """Stop the example by closing the channel and connection. We
-        set a flag here so that we stop scheduling new messages to be
-        published. The IOLoop is started because this method is
-        invoked by the Try/Catch below when KeyboardInterrupt is caught.
-        Starting the IOLoop again will allow the publisher to cleanly
-        disconnect from RabbitMQ.
-
+        """
+        设置_stopping标志位。调用self.close_channel()和self.close_connection()。
         """
         LOGGER.info('Stopping')
         self._stopping = True
@@ -358,16 +322,15 @@ class ExamplePublisher(object):
         self.close_connection()
 
     def close_channel(self):
-        """Invoke this command to close the channel with RabbitMQ by sending
-        the Channel.Close RPC command.
-
+        """
+        发送Channel.Close RPC 命令关闭chanell.
         """
         if self._channel is not None:
             LOGGER.info('Closing the channel')
             self._channel.close()
 
     def close_connection(self):
-        """This method closes the connection to RabbitMQ."""
+        """关闭与RabbitMQ的连接"""
         if self._connection is not None:
             LOGGER.info('Closing connection')
             self._connection.close()
