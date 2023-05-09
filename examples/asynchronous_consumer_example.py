@@ -13,17 +13,13 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ExampleConsumer(object):
-    """This is an example consumer that will handle unexpected interactions
-    with RabbitMQ such as channel and connection closures.
+    """
+    这个是一个消费者实例，可以处理预期RabbitMA意外的channel和connection情况。
 
-    If RabbitMQ closes the connection, this class will stop and indicate
-    that reconnection is necessary. You should look at the output, as
-    there are limited reasons why the connection may be closed, which
-    usually are tied to permission related issues or socket timeouts.
+    如果RabbitMQ关闭连接，这个类会停下来，并检测是否有必要重新连接。
+    可以通过对output的观察,输出中出现的连接断开的原因是有限的，比如权限问题或者socket超时
 
-    If the channel is closed, it will indicate a problem with one of the
-    commands that were issued and that should surface in the output as well.
-
+    如果channel被关闭了，会在输出中指名哪个特定的命令有问题。
     """
     EXCHANGE = 'message'
     EXCHANGE_TYPE = ExchangeType.topic
@@ -31,10 +27,10 @@ class ExampleConsumer(object):
     ROUTING_KEY = 'example.text'
 
     def __init__(self, amqp_url):
-        """Create a new instance of the consumer class, passing in the AMQP
-        URL used to connect to RabbitMQ.
+        """
+        创建一个消费者类实例，传入一个AMQP URL用来连接到RabbitMQ
 
-        :param str amqp_url: The AMQP url to connect with
+        :param str amqp_url: 连接到的AMQP URL
 
         """
         self.should_reconnect = False
@@ -46,17 +42,13 @@ class ExampleConsumer(object):
         self._consumer_tag = None
         self._url = amqp_url
         self._consuming = False
-        # In production, experiment with higher prefetch values
-        # for higher consumer throughput
+        # 在生产环境下，更大的prefetch值可以提高consumer的吞吐量
         self._prefetch_count = 1
 
     def connect(self):
-        """This method connects to RabbitMQ, returning the connection handle.
-        When the connection is established, the on_connection_open method
-        will be invoked by pika.
-
+        """
+        这个方法连接到RabbitMQ，返回连接句柄。一旦连接建立，pika就会调用on_connection_open方法。（连接回调）
         :rtype: pika.SelectConnection
-
         """
         LOGGER.info('Connecting to %s', self._url)
         return pika.SelectConnection(
@@ -74,35 +66,33 @@ class ExampleConsumer(object):
             self._connection.close()
 
     def on_connection_open(self, _unused_connection):
-        """This method is called by pika once the connection to RabbitMQ has
-        been established. It passes the handle to the connection object in
-        case we need it, but in this case, we'll just mark it unused.
+        """
+        在pika连接到RabbitMQ的时候会回调这个函数。
+        如果需要的话，传递句柄给连接对象。但是在当前的实例中，仅仅是标记为未使用。
 
         :param pika.SelectConnection _unused_connection: The connection
-
+        实际上会调用self.open_channel
         """
         LOGGER.info('Connection opened')
         self.open_channel()
 
     def on_connection_open_error(self, _unused_connection, err):
-        """This method is called by pika if the connection to RabbitMQ
-        can't be established.
+        """
+        如果与RabbitMQ的连接无法建立的话，会被pika调用，同样是回调函数。
 
-        :param pika.SelectConnection _unused_connection: The connection
-        :param Exception err: The error
+        :param pika.SelectConnection _unused_connection: 连接对象
+        :param Exception err: 错误Error
 
         """
         LOGGER.error('Connection open failed: %s', err)
         self.reconnect()
 
     def on_connection_closed(self, _unused_connection, reason):
-        """This method is invoked by pika when the connection to RabbitMQ is
-        closed unexpectedly. Since it is unexpected, we will reconnect to
-        RabbitMQ if it disconnects.
+        """
+        如果与RabbitMQ的连接意外关闭，pika会回调这个方法。因为这种关闭是意料之外的，所以会尝试重建连接。
 
-        :param pika.connection.Connection connection: The closed connection obj
-        :param Exception reason: exception representing reason for loss of
-            connection.
+        :param pika.connection.Connection connection: 关闭的connection对象
+        :param Exception reason: 失去连接展示的原因.
 
         """
         self._channel = None
@@ -113,28 +103,25 @@ class ExampleConsumer(object):
             self.reconnect()
 
     def reconnect(self):
-        """Will be invoked if the connection can't be opened or is
-        closed. Indicates that a reconnect is necessary then stops the
-        ioloop.
+        """
+        如果连接无法连接或者连接关闭的时候被调用。表明必须重新连接设置标志位，终止ioloop
 
         """
         self.should_reconnect = True
         self.stop()
 
     def open_channel(self):
-        """Open a new channel with RabbitMQ by issuing the Channel.Open RPC
-        command. When RabbitMQ responds that the channel is open, the
-        on_channel_open callback will be invoked by pika.
-
+        """
+        通过发出Channel.Open RPC 命令开启一个与RabbitMQ的连接。
+        当RabbitMQ表示channel已经开启,pika会调用self.on_channel_open回调.
         """
         LOGGER.info('Creating a new channel')
         self._connection.channel(on_open_callback=self.on_channel_open)
 
     def on_channel_open(self, channel):
-        """This method is invoked by pika when the channel has been opened.
-        The channel object is passed in so we can make use of it.
-
-        Since the channel is now open, we'll declare the exchange to use.
+        """
+        在channel被开启的时候会被pika回调，传入的参数是channel对象，所以在这个函数中可以进行使用。
+        一旦channel被打开，我们就会将exchange声明为可用(调用self.setup_exchange)。exchange的名字是类配置
 
         :param pika.channel.Channel channel: The channel object
 
@@ -145,33 +132,31 @@ class ExampleConsumer(object):
         self.setup_exchange(self.EXCHANGE)
 
     def add_on_channel_close_callback(self):
-        """This method tells pika to call the on_channel_closed method if
-        RabbitMQ unexpectedly closes the channel.
-
+        """
+        这个方法告诉pika在channel意外被RabbitMQ关闭的时候调用on_channel_closed方法。
         """
         LOGGER.info('Adding channel close callback')
         self._channel.add_on_close_callback(self.on_channel_closed)
 
     def on_channel_closed(self, channel, reason):
-        """Invoked by pika when RabbitMQ unexpectedly closes the channel.
-        Channels are usually closed if you attempt to do something that
-        violates the protocol, such as re-declare an exchange or queue with
-        different parameters. In this case, we'll close the connection
-        to shutdown the object.
+        """
+        在RabbitMQ意外关闭channel的时候被pika调用。
+        如果尝试做一些违反协议的事情，比如使用不同的参数重新声明交换或者队列，通道通常会关闭。
+        在这种情况下，我们会关闭连接以终止当前对象。
 
-        :param pika.channel.Channel: The closed channel
-        :param Exception reason: why the channel was closed
+        :param pika.channel.Channel: 被关闭的channel
+        :param Exception reason: channel为什么被关闭
 
         """
         LOGGER.warning('Channel %i was closed: %s', channel, reason)
         self.close_connection()
 
     def setup_exchange(self, exchange_name):
-        """Setup the exchange on RabbitMQ by invoking the Exchange.Declare RPC
-        command. When it is complete, the on_exchange_declareok method will
-        be invoked by pika.
+        """
+        通过调用 Exchange.Declare RPC 命令在RabbitMQ上设置一个exchange。
+        完成后，pika会调用`self.on_exchange_declareok`。
 
-        :param str|unicode exchange_name: The name of the exchange to declare
+        :param str|unicode exchange_name: 需要声明的exhange的name
 
         """
         LOGGER.info('Declaring exchange: %s', exchange_name)
@@ -185,8 +170,8 @@ class ExampleConsumer(object):
             callback=cb)
 
     def on_exchange_declareok(self, _unused_frame, userdata):
-        """Invoked by pika when RabbitMQ has finished the Exchange.Declare RPC
-        command.
+        """
+        在Exchange.Declare RPC命名完成后被pika调用
 
         :param pika.Frame.Method unused_frame: Exchange.DeclareOk response frame
         :param str|unicode userdata: Extra user data (exchange name)
@@ -196,10 +181,9 @@ class ExampleConsumer(object):
         self.setup_queue(self.QUEUE)
 
     def setup_queue(self, queue_name):
-        """Setup the queue on RabbitMQ by invoking the Queue.Declare RPC
-        command. When it is complete, the on_queue_declareok method will
-        be invoked by pika.
-
+        """
+        通过调用 Queue.Declare RPC 命令在RabbitMQ上启动一个queue。
+        完成后 pika 会调用 self.on_queue_declareok
         :param str|unicode queue_name: The name of the queue to declare.
 
         """
@@ -208,11 +192,10 @@ class ExampleConsumer(object):
         self._channel.queue_declare(queue=queue_name, callback=cb)
 
     def on_queue_declareok(self, _unused_frame, userdata):
-        """Method invoked by pika when the Queue.Declare RPC call made in
-        setup_queue has completed. In this method we will bind the queue
-        and exchange together with the routing key by issuing the Queue.Bind
-        RPC command. When this command is complete, the on_bindok method will
-        be invoked by pika.
+        """
+        当在 self.setup_queue 中的 Queue.Declare RPC 调用完成后被 pika 调用。
+        在这个方法里面，通过调用 Queue.Bind RPC 命令，通过routing_key 将exchange和queue绑定。
+        该命令结束后 pika 会调用 self.on_bindok 方法。
 
         :param pika.frame.Method _unused_frame: The Queue.DeclareOk frame
         :param str|unicode userdata: Extra user data (queue name)
@@ -229,8 +212,8 @@ class ExampleConsumer(object):
             callback=cb)
 
     def on_bindok(self, _unused_frame, userdata):
-        """Invoked by pika when the Queue.Bind method has completed. At this
-        point we will set the prefetch count for the channel.
+        """
+        当 Queue.Bind 方法调用成功后被 pika 调用。在这里会调用 self.set_qos 设置 prefetch 数量。
 
         :param pika.frame.Method _unused_frame: The Queue.BindOk response frame
         :param str|unicode userdata: Extra user data (queue name)
@@ -240,19 +223,17 @@ class ExampleConsumer(object):
         self.set_qos()
 
     def set_qos(self):
-        """This method sets up the consumer prefetch to only be delivered
-        one message at a time. The consumer must acknowledge this message
-        before RabbitMQ will deliver another one. You should experiment
-        with different prefetch values to achieve desired performance.
-
+        """
+        这个方法设置消费者的 prefetch 来限制每次获取的消息的数量。
+        缓冲区满了之后，只有消费者进行了ack，RabbitMQ才会再次推送。可以通过改变 prefetch 适应系统的性能要求。
         """
         self._channel.basic_qos(
             prefetch_count=self._prefetch_count, callback=self.on_basic_qos_ok)
 
     def on_basic_qos_ok(self, _unused_frame):
-        """Invoked by pika when the Basic.QoS method has completed. At this
-        point we will start consuming messages by calling start_consuming
-        which will invoke the needed RPC commands to start the process.
+        """
+        在Basic.Qos 方法完成后被pika调用。
+        在这里，我们通过调用start_consuming来开始消息消费。这个会调用对应的RPC命令.
 
         :param pika.frame.Method _unused_frame: The Basic.QosOk response frame
 
@@ -261,14 +242,10 @@ class ExampleConsumer(object):
         self.start_consuming()
 
     def start_consuming(self):
-        """This method sets up the consumer by first calling
-        add_on_cancel_callback so that the object is notified if RabbitMQ
-        cancels the consumer. It then issues the Basic.Consume RPC command
-        which returns the consumer tag that is used to uniquely identify the
-        consumer with RabbitMQ. We keep the value to use it when we want to
-        cancel consuming. The on_message method is passed in as a callback pika
-        will invoke when a message is fully received.
-
+        """
+        这个方法在第一次进行调用的时候通过调用add_on_cancel_callback设置消费者对象，添加的回调在RabbitMQ停止消费者的时候会被调用。
+        然后发出 Basic.Consume RPC 命令，获取到 RabbitMQ 返回中的消费者唯一标识符.这个标识符在我们希望终止消费的时候会用到。
+        on_message 被传入到 channel.basic_consume 中，在完整收到一个message后pika会对on_message进行回调.
         """
         LOGGER.info('Issuing consumer related RPC commands')
         self.add_on_cancel_callback()
@@ -278,20 +255,18 @@ class ExampleConsumer(object):
         self._consuming = True
 
     def add_on_cancel_callback(self):
-        """Add a callback that will be invoked if RabbitMQ cancels the consumer
-        for some reason. If RabbitMQ does cancel the consumer,
-        on_consumer_cancelled will be invoked by pika.
-
+        """
+        添加了一个 self.on_consumer_cancelled 回调，如果RabbitMQ因为某些原因终止了consumer的运行会触发回调。
+        如果RabbitMQ取消了consumer，那么pika会调用 self.on_consumer_cancelled。
         """
         LOGGER.info('Adding consumer cancellation callback')
         self._channel.add_on_cancel_callback(self.on_consumer_cancelled)
 
     def on_consumer_cancelled(self, method_frame):
-        """Invoked by pika when RabbitMQ sends a Basic.Cancel for a consumer
-        receiving messages.
+        """
+        当RabbitMQ发送 Basic.Cancel 给一个消费者已经接收的消息的时候回调该函数。作用是关闭channel。
 
         :param pika.frame.Method method_frame: The Basic.Cancel frame
-
         """
         LOGGER.info('Consumer was cancelled remotely, shutting down: %r',
                     method_frame)
@@ -299,17 +274,14 @@ class ExampleConsumer(object):
             self._channel.close()
 
     def on_message(self, _unused_channel, basic_deliver, properties, body):
-        """Invoked by pika when a message is delivered from RabbitMQ. The
-        channel is passed for your convenience. The basic_deliver object that
-        is passed in carries the exchange, routing key, delivery tag and
-        a redelivered flag for the message. The properties passed in is an
-        instance of BasicProperties with the message properties and the body
-        is the message that was sent.
+        """
+        一个消息从RabbitMQ发送过来的时候被回调。
 
         :param pika.channel.Channel _unused_channel: The channel object
-        :param pika.Spec.Basic.Deliver: basic_deliver method
-        :param pika.Spec.BasicProperties: properties
-        :param bytes body: The message body
+        :param pika.Spec.Basic.Deliver: basic_deliver method。
+            携带exhange, routing key,delivery tag和消息标志。
+        :param pika.Spec.BasicProperties: properties，BasicProperties实例
+        :param bytes body: The message body，消息体
 
         """
         LOGGER.info('Received message # %s from %s: %s',
@@ -317,8 +289,8 @@ class ExampleConsumer(object):
         self.acknowledge_message(basic_deliver.delivery_tag)
 
     def acknowledge_message(self, delivery_tag):
-        """Acknowledge the message delivery from RabbitMQ by sending a
-        Basic.Ack RPC method for the delivery tag.
+        """
+        通过发送 Basic.Ack RPC 方法来确认消息，携带delivery tag指定特定消息
 
         :param int delivery_tag: The delivery tag from the Basic.Deliver frame
 
@@ -327,9 +299,8 @@ class ExampleConsumer(object):
         self._channel.basic_ack(delivery_tag)
 
     def stop_consuming(self):
-        """Tell RabbitMQ that you would like to stop consuming by sending the
-        Basic.Cancel RPC command.
-
+        """
+        发送 Basic.Cancel RPC 命令告诉 RabbitMQ将要停止消费
         """
         if self._channel:
             LOGGER.info('Sending a Basic.Cancel RPC command to RabbitMQ')
@@ -338,11 +309,8 @@ class ExampleConsumer(object):
             self._channel.basic_cancel(self._consumer_tag, cb)
 
     def on_cancelok(self, _unused_frame, userdata):
-        """This method is invoked by pika when RabbitMQ acknowledges the
-        cancellation of a consumer. At this point we will close the channel.
-        This will invoke the on_channel_closed method once the channel has been
-        closed, which will in-turn close the connection.
-
+        """
+        RabbitMQ 确认一个消费者的取消之后 pika 调用该方法。在这里会关闭channel，进而触发 on_channel_closed 来关闭connection。
         :param pika.frame.Method _unused_frame: The Basic.CancelOk frame
         :param str|unicode userdata: Extra user data (consumer tag)
 
@@ -354,31 +322,26 @@ class ExampleConsumer(object):
         self.close_channel()
 
     def close_channel(self):
-        """Call to close the channel with RabbitMQ cleanly by issuing the
-        Channel.Close RPC command.
-
+        """
+        调用 Channel.Close RPC 命令关闭 channel.
         """
         LOGGER.info('Closing the channel')
         self._channel.close()
 
     def run(self):
-        """Run the example consumer by connecting to RabbitMQ and then
-        starting the IOLoop to block and allow the SelectConnection to operate.
-
+        """
+        运行示例消费者，连接到RabbitMQ并开始 IOLoop 进入阻塞并允许 Selection 进行操作.
         """
         self._connection = self.connect()
         self._connection.ioloop.start()
 
     def stop(self):
-        """Cleanly shutdown the connection to RabbitMQ by stopping the consumer
-        with RabbitMQ. When RabbitMQ confirms the cancellation, on_cancelok
-        will be invoked by pika, which will then closing the channel and
-        connection. The IOLoop is started again because this method is invoked
-        when CTRL-C is pressed raising a KeyboardInterrupt exception. This
-        exception stops the IOLoop which needs to be running for pika to
-        communicate with RabbitMQ. All of the commands issued prior to starting
-        the IOLoop will be buffered but not processed.
-
+        """
+        停止消费者与 RabbitMQ 的连接（确保停止消费）。
+        当RabbitMQ同意了，之后，pika会调用 on_cancelok 关闭channel和connection。
+        这个回调是在channel.basic_cancel中设置的。
+        这里要重启ioloop是因为当键盘输入CTRL-C的时候会触发异常。这个异常会终止IOLoop，但是pika需要通过这个与RabbitMQ进行通信。
+        启动IOLoop之前发出的所有命令都将被缓冲，但是不会被处理。
         """
         if not self._closing:
             self._closing = True
@@ -392,9 +355,8 @@ class ExampleConsumer(object):
 
 
 class ReconnectingExampleConsumer(object):
-    """This is an example consumer that will reconnect if the nested
-    ExampleConsumer indicates that a reconnect is necessary.
-
+    """
+    消费者实例, 在内嵌的ExampleConsumer表明需要重新连接的时候会进行重新连接。
     """
 
     def __init__(self, amqp_url):
@@ -403,6 +365,9 @@ class ReconnectingExampleConsumer(object):
         self._consumer = ExampleConsumer(self._amqp_url)
 
     def run(self):
+        """
+            实际上的业务上的consumer会调用这个。
+        """
         while True:
             try:
                 self._consumer.run()
